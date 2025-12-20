@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Universal Sandbox Mobile</title>
+<style>
+body{margin:0;overflow:hidden;background:black;color:white;font-family:sans-serif}
+canvas{display:block}
+#ui{
+position:fixed;top:10px;left:10px;
+background:rgba(0,0,0,0.5);
+padding:10px;border-radius:12px;
+backdrop-filter:blur(8px);
+}
+label{font-size:12px}
+input{width:140px}
+button{
+margin-top:6px;
+width:100%;
+border:none;
+padding:6px;
+border-radius:8px;
+background:#ff8844;
+color:black;
+font-weight:bold;
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="ui">
+<label>Мощность</label><br>
+<input id="power" type="range" min="1" max="5" step="0.1" value="2"><br>
+<label>Частицы</label><br>
+<input id="count" type="range" min="300" max="2000" step="100" value="1200"><br>
+<button onclick="explode()">SUPERNOVA</button>
+</div>
+
+<script>
+const c=document.getElementById("c"),x=c.getContext("2d");
+function resize(){c.width=innerWidth;c.height=innerHeight}
+resize();addEventListener("resize",resize);
+
+// ===== CAMERA =====
+let cam={x:0,y:0,z:1};
+function camera(){
+x.setTransform(
+cam.z,0,0,cam.z,
+c.width/2-cam.x*cam.z,
+c.height/2-cam.y*cam.z
+);
+}
+
+// ===== OBJECTS =====
+let star={x:0,y:0,r:40,p:0,dead:false};
+let wave={r:0,a:0};
+let parts=[];
+let planets=[];
+let nebula=[];
+let blackHole={active:false,r:5};
+
+// ===== PLANETS =====
+for(let i=0;i<7;i++)
+planets.push({a:Math.random()*6.28,d:150+i*80,s:5+Math.random()*5,alive:true});
+
+// ===== NEBULA =====
+for(let i=0;i<60;i++)
+nebula.push({
+x:(Math.random()-0.5)*3000,
+y:(Math.random()-0.5)*3000,
+r:300+Math.random()*400,
+h:200+Math.random()*80,
+a:Math.random()*6.28
+});
+
+// ===== EXPLOSION =====
+function explode(){
+parts=[];
+let n=+count.value;
+let pow=+power.value;
+for(let i=0;i<n;i++){
+let a=Math.random()*6.28;
+let s=Math.random()*6*pow;
+parts.push({
+x:0,y:0,
+vx:Math.cos(a)*s,
+vy:Math.sin(a)*s,
+l:1,
+r:Math.random()*3+1,
+h:30+Math.random()*60
+});
+}
+wave.r=0;wave.a=0.7;
+star.dead=true;
+setTimeout(()=>blackHole.active=true,2000);
+}
+
+// ===== DRAW =====
+function draw(){
+x.setTransform(1,0,0,1,0,0);
+x.fillStyle="rgba(0,0,0,0.25)";
+x.fillRect(0,0,c.width,c.height);
+camera();
+
+// NEBULA
+nebula.forEach(n=>{
+n.a+=0.0002;
+n.x+=Math.cos(n.a)*0.02;
+n.y+=Math.sin(n.a)*0.02;
+let g=x.createRadialGradient(n.x,n.y,0,n.x,n.y,n.r);
+g.addColorStop(0,`hsla(${n.h},70%,60%,0.08)`);
+g.addColorStop(1,"transparent");
+x.fillStyle=g;
+x.beginPath();x.arc(n.x,n.y,n.r,0,6.28);x.fill();
+});
+
+// PLANETS
+planets.forEach(p=>{
+if(!p.alive)return;
+p.a+=0.002;
+let px=Math.cos(p.a)*p.d;
+let py=Math.sin(p.a)*p.d;
+if(wave.r>p.d)p.alive=false;
+x.fillStyle="#6fa8dc";
+x.beginPath();x.arc(px,py,p.s,0,6.28);x.fill();
+});
+
+// STAR
+if(!star.dead){
+star.p+=0.05;
+let r=star.r+Math.sin(star.p)*3;
+let g=x.createRadialGradient(0,0,0,0,0,r*3);
+g.addColorStop(0,"#fff5cc");
+g.addColorStop(1,"transparent");
+x.fillStyle=g;
+x.beginPath();x.arc(0,0,r*3,0,6.28);x.fill();
+}
+
+// PARTICLES
+parts.forEach(p=>{
+p.x+=p.vx;p.y+=p.vy;p.l-=0.008;
+x.fillStyle=`hsla(${p.h},100%,60%,${p.l})`;
+x.beginPath();x.arc(p.x,p.y,p.r,0,6.28);x.fill();
+});
+parts=parts.filter(p=>p.l>0);
+
+// SHOCKWAVE
+if(star.dead){
+wave.r+=4;
+wave.a-=0.008;
+x.strokeStyle=`rgba(255,255,255,${wave.a})`;
+x.lineWidth=3;
+x.beginPath();x.arc(0,0,wave.r,0,6.28);x.stroke();
+}
+
+// BLACK HOLE
+if(blackHole.active){
+blackHole.r+=0.05;
+let g=x.createRadialGradient(0,0,0,0,0,blackHole.r*8);
+g.addColorStop(0,"black");
+g.addColorStop(1,"transparent");
+x.fillStyle=g;
+x.beginPath();x.arc(0,0,blackHole.r*8,0,6.28);x.fill();
+}
+
+requestAnimationFrame(draw);
+}
+draw();
+
+// ===== INPUT =====
+let drag=false,lx=0,ly=0;
+c.onpointerdown=e=>{drag=true;lx=e.clientX;ly=e.clientY}
+c.onpointermove=e=>{
+if(!drag)return;
+cam.x-=(e.clientX-lx)/cam.z;
+cam.y-=(e.clientY-ly)/cam.z;
+lx=e.clientX;ly=e.clientY;
+}
+c.onpointerup=()=>drag=false;
+
+c.onwheel=e=>{
+cam.z*=e.deltaY>0?0.9:1.1;
+cam.z=Math.max(0.2,Math.min(4,cam.z));
+}
+</script>
+</body>
+</html>
